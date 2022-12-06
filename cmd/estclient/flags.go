@@ -64,7 +64,7 @@ const (
 	csrFlag                = "csr"
 	dnsNamesFlag           = "dnsnames"
 	ekcertsFlag            = "ekcerts"
-	emailsFlag             = "emails"
+	emailsFlag             = "emails/userID"
 	explicitAnchorFlag     = "explicit"
 	headersFlag            = "headers"
 	helpFlag               = "help"

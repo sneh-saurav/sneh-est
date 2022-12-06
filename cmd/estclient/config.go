@@ -35,6 +35,7 @@ import (
 
 	"github.com/ThalesIgnite/crypto11"
 	"github.com/globalsign/est"
+
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/globalsign/pemfile"
@@ -169,7 +170,8 @@ func (cfg *config) GenerateCSR(key interface{}) (*x509.CertificateRequest, error
 		if cfg.openPrivateKey == nil {
 			return nil, errNoPrivateKey
 		}
-		key = cfg.openPrivateKey
+		key = cfg.openPrivateKey // Taking private key from configs
+		//pp.Println("CHECKING CSR.go 01------('PRIVATE KEY')----", key)
 	}
 
 	tmpl, err := cfg.CSRTemplate()
@@ -182,10 +184,16 @@ func (cfg *config) GenerateCSR(key interface{}) (*x509.CertificateRequest, error
 		return nil, fmt.Errorf("failed to create certificate request: %v", err)
 	}
 
-	csr, err := x509.ParseCertificateRequest(der)
+	csr, err := x509.ParseCertificateRequest(der) // Parsing into x509 and get the csr
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse certificate request: %v", err)
 	}
+	//pp.Println("CHECKING ARGUMENTS------", csr.EmailAddresses)
+	// certEncoded := pem.EncodeToMemory((&pem.Block{
+	// 	Type:  "CERTIFICATE",
+	// 	Bytes: csr.Raw,
+	// }))
+	// pp.Println("CHECKING CRS.go 2-----('CSR')------", string(certEncoded))
 
 	return csr, nil
 }

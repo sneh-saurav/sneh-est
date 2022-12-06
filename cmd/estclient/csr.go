@@ -36,7 +36,7 @@ func csr(w io.Writer, set *flag.FlagSet) error {
 		}
 	}()
 
-	csr, err := cfg.GenerateCSR(nil)
+	csr, err := cfg.GenerateCSR(nil) // Generating crs
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func csr(w io.Writer, set *flag.FlagSet) error {
 	}
 	defer closeFunc()
 
-	if err := pemfile.WriteCSR(out, csr); err != nil {
+	if err := pemfile.WriteCSR(out, csr); err != nil { // Writing the csr out from here
 		return fmt.Errorf("failed to write certificate request: %v", err)
 	}
 

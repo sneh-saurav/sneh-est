@@ -48,6 +48,7 @@ const (
 )
 
 func main() {
+
 	log.SetPrefix(fmt.Sprintf("%s: ", appName))
 	log.SetFlags(0)
 
@@ -74,11 +75,13 @@ func main() {
 	var err error
 	if *fConfig != "" {
 		cfg, err = configFromFile(*fConfig)
+		//pp.Println("CHECKING MAIN-----", cfg)
 		if err != nil {
 			log.Fatalf("failed to read configuration file: %v", err)
 		}
 	} else {
 		cfg = &config{}
+		//pp.Println("CHECKING MAIN-----", cfg.MockCA)
 	}
 
 	// Create mock CA. If no mock CA was specified in the configuration file,
@@ -91,6 +94,7 @@ func main() {
 		}
 	} else {
 		ca, err = mockca.NewTransient()
+		//pp.Println("CHECKING MAIN-----", ca)
 		if err != nil {
 			log.Fatalf("failed to create mock CA: %v", err)
 		}
@@ -137,7 +141,6 @@ func main() {
 			}
 			clientCACerts = append(clientCACerts, certs...)
 		}
-
 		listenAddr = cfg.TLS.ListenAddr
 	} else {
 		serverKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -243,7 +246,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP)
 
-	logger.Infof("Starting EST server FOR NON-PRODUCTION USE ONLY")
+	logger.Infof("Starting EST server FOR NON-PRODUCTION USE ONLY on 8443")
 
 	go s.ListenAndServeTLS("", "")
 
@@ -254,4 +257,5 @@ func main() {
 	logger.Infof("Closing EST server with signal %v", got)
 
 	s.Close()
+
 }

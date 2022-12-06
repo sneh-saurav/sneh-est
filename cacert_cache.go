@@ -75,7 +75,13 @@ func (c *cacertCache) Verify(
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}
 
-	if _, err := cert.Verify(opts); err != nil {
+	_, err = cert.Verify(opts)
+	// for _, j := range chains {
+	// 	for i, _ := range j {
+	// 		fmt.Println("SUBJECT OF THE CHAIN CERTIFICATE", j[i].Subject)
+	// 	}
+	// }
+	if err != nil {
 		return errInvalidClientCert
 	}
 

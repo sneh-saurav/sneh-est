@@ -20,8 +20,11 @@ import (
 	"context"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -30,6 +33,8 @@ import (
 	"strings"
 	"time"
 
+	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/globalsign/est/db"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"go.mozilla.org/pkcs7"
@@ -68,6 +73,8 @@ type ServerConfig struct {
 // ctxKey is an unexported custom type for request context keys.
 type ctxKey int
 
+const certPEMType string = "CERTIFICATE"
+
 // Request context key constants.
 const (
 	ctxKeyCA ctxKey = iota
@@ -97,6 +104,46 @@ const (
 	logMsgTransferEncodingInvalid = "invalid content-transfer-encoding"
 	logMsgVerifyFailed            = "failed to verify client certificate"
 )
+
+// Enrollment Data
+type EnrollData struct {
+	EnrollID      int    `db:"enroll_id"`
+	RequestID     string `db:"request_id"`
+	Method        string `db:"method"`
+	Uri           string `db:"uri"`
+	Protocol      string `db:"protocol"`
+	RemoteAddress string `db:"remote_address"`
+	StatusCode    int    `db:"status_code"`
+	ByteLenght    int    `db:"byte_length"`
+	TimeTaken     string `db:"time_taken"`
+}
+
+type DeviceCert struct {
+	DeviceID   int       `db:"device_id" json:"device_id"`
+	Subject    string    `db:"subject" json:"subject"`
+	UserID     string    `db:"user_id" json:"user_id"`
+	DeviceCert string    `db:"certificate" json:"certificate"`
+	SignedBy   string    `db:"issuer" json:"issuer"`
+	NotBefore  string    `db:"not_before" json:"not_before"`
+	NotAfter   string    `db:"not_after" json:"not_after"`
+	CreatedOn  time.Time `db:"created_on" json:"created_on"`
+}
+
+type RootCA struct {
+	Subject   string `db:"subject"`
+	RootCa    string `db:"certificate"`
+	Issuer    string `db:"issuer"`
+	NotBefore string `db:"not_before"`
+	NotAfter  string `db:"not_after"`
+}
+
+type IntermediateCA struct {
+	Subject        string `db:"subject"`
+	IntermediateCa string `db:"certificate"`
+	Issuer         string `db:"issuer"`
+	NotBefore      string `db:"not_before"`
+	NotAfter       string `db:"not_after"`
+}
 
 // LoggerFromContext returns a logger included in a context.
 func LoggerFromContext(ctx context.Context) Logger {
@@ -162,6 +209,9 @@ func NewRouter(cfg *ServerConfig) (http.Handler, error) {
 	r.With(
 		requireBasicAuth(cfg.CheckBasicAuth, false),
 	).Get("/healthcheck", healthcheck)
+	r.With(requireBasicAuth(cfg.CheckBasicAuth, false)).Get(getEnrollDataEndpoint, HandleGetEnrolledData)
+	r.With(requireBasicAuth(cfg.CheckBasicAuth, false)).Get("/createtoken", HandleCreatetoken)
+	r.With(requireBasicAuth(cfg.CheckBasicAuth, false)).Get("/auth/registration/user", HandleCreateAdminUser)
 
 	// EST endpoints.
 	r.Route(estPathPrefix, func(r chi.Router) {
@@ -237,6 +287,10 @@ func NewRouter(cfg *ServerConfig) (http.Handler, error) {
 				requireBasicAuth(cfg.CheckBasicAuth, true),
 			).Post(tpmenrollEndpoint, tpmenroll)
 		})
+		// // GET user eroll data
+		// r.Route(fmt.Sprintf("/{%s}", apsParamName), func(r chi.Router) {
+		// 	r.With(requireContentType("application/json")).Post(getEnrollDataEndpoint, GetEnrolledData)
+		// })
 	})
 
 	return r, nil
@@ -249,6 +303,7 @@ func healthcheck(w http.ResponseWriter, r *http.Request) {
 
 // cacerts services the /cacerts endpoint.
 func cacerts(w http.ResponseWriter, r *http.Request) {
+
 	ctx := r.Context()
 	aps := chi.URLParam(r, apsParamName)
 
@@ -259,6 +314,45 @@ func cacerts(w http.ResponseWriter, r *http.Request) {
 
 	// Update CA certificates cache with each explicit call to /cacerts.
 	certCacheFromContext(ctx).Add(aps, certs)
+
+	var anchor string
+	var caCerts string
+
+	var rootCa RootCA
+	var intermediateCa IntermediateCA
+	var encodedCerts []string
+	for _, i := range certs {
+		certEncoded := pem.EncodeToMemory((&pem.Block{
+			Type:  certPEMType,
+			Bytes: i.Raw,
+		}))
+		encodedCerts = append(encodedCerts, string(certEncoded))
+	}
+	intermediateCa.Subject = certs[0].Subject.String()
+	intermediateCa.Issuer = certs[0].Issuer.String()
+	intermediateCa.NotBefore = certs[0].NotBefore.String()
+	intermediateCa.NotAfter = certs[0].NotAfter.String()
+
+	rootCa.Subject = certs[1].Subject.String()
+	rootCa.Issuer = certs[1].Issuer.String()
+	rootCa.NotBefore = certs[1].NotBefore.String()
+	rootCa.NotAfter = certs[1].NotAfter.String()
+
+	anchor = encodedCerts[1]
+	caCerts = encodedCerts[0] + encodedCerts[1]
+
+	rootCa.RootCa = anchor
+	intermediateCa.IntermediateCa = caCerts
+
+	err = rootCa.storeRootCA()
+	if err != nil {
+		fmt.Println("ERROR while persisting root certs in the database")
+	}
+
+	err = intermediateCa.storeIntermediateCA()
+	if err != nil {
+		fmt.Println("ERROR while persisting intermediate certs in the database")
+	}
 
 	writeResponse(w, mimeTypePKCS7, true, certs)
 }
@@ -278,6 +372,7 @@ func csrattrs(w http.ResponseWriter, r *http.Request) {
 
 // enroll services the /simpleenroll endpoint.
 func enroll(w http.ResponseWriter, r *http.Request) {
+
 	ctx := r.Context()
 	aps := chi.URLParam(r, apsParamName)
 
@@ -364,13 +459,45 @@ func enroll(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var certEncoded string
+	var deviceCert DeviceCert
+
 	// Request certificate from backing CA.
 	var cert *x509.Certificate
 	if renew {
-		cert, err = caFromContext(ctx).Reenroll(ctx, r.TLS.PeerCertificates[0], csr, aps, r)
+		cert, _ = caFromContext(ctx).Reenroll(ctx, r.TLS.PeerCertificates[0], csr, aps, r)
 	} else {
 		cert, err = caFromContext(ctx).Enroll(ctx, csr, aps, r)
+
+		// Verify certificate against CA certificates.
+		if writeOnError(ctx, w, logMsgVerifyFailed, err) {
+			return
+		}
+
+		// // Checking for verification
+		// err = certCacheFromContext(ctx).Verify(ctx, aps, cert, r)
+		// if err != nil {
+		// 	fmt.Println("ERROR :", err)
+		// }
+
+		certEncoded = string(pem.EncodeToMemory((&pem.Block{
+			Type:  certPEMType,
+			Bytes: cert.Raw,
+		})))
+
 	}
+
+	deviceCert.Subject = cert.Subject.String()
+	deviceCert.DeviceCert = certEncoded
+	deviceCert.SignedBy = cert.Issuer.String()
+	deviceCert.NotBefore = cert.NotBefore.String()
+	deviceCert.NotAfter = cert.NotAfter.String()
+	deviceCert.UserID = cert.EmailAddresses[1]
+	err = deviceCert.storeDeviceCert()
+	if err != nil {
+		fmt.Println("ERROR while persisting device certs in the database")
+	}
+
 	if writeOnError(r.Context(), w, logMsgEnrollFailed, err) {
 		return
 	}
@@ -538,11 +665,11 @@ func withLogger(logger Logger) func(next http.Handler) http.Handler {
 			t1 := time.Now()
 
 			defer func() {
+				var eData EnrollData
 				scheme := "http"
 				if r.TLS != nil {
 					scheme = "https"
 				}
-
 				logger.Infow("HTTP request",
 					"Method", r.Method,
 					"URI", fmt.Sprintf("%s://%s%s", scheme, r.Host, r.RequestURI),
@@ -552,6 +679,23 @@ func withLogger(logger Logger) func(next http.Handler) http.Handler {
 					"Bytes Written", ww.BytesWritten(),
 					"Time Taken", time.Since(t1),
 				)
+				if strings.Contains(r.RequestURI, "/est/simpleenroll") {
+
+					URI := fmt.Sprintf("%s://%s%s", scheme, r.Host, r.RequestURI)
+					eData.RequestID = middleware.GetReqID(r.Context())
+					eData.Method = r.Method
+					eData.Uri = URI
+					eData.Protocol = r.Proto
+					eData.RemoteAddress = r.RemoteAddr
+					eData.StatusCode = http.StatusOK
+					eData.ByteLenght = ww.BytesWritten()
+					timeDuration := (time.Since(t1)).String()
+					eData.TimeTaken = timeDuration
+					err := eData.storeEnrollData()
+					if err != nil {
+						fmt.Println("ERROR :", err)
+					}
+				}
 			}()
 
 			ctx := context.WithValue(r.Context(), ctxKeyLogger, logger)
@@ -745,4 +889,175 @@ func requireBasicAuth(
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func (eData *EnrollData) storeEnrollData() error {
+
+	// Connecting to the database
+	ldb, errs := db.Connect("")
+	if errs != nil {
+		log.Fatal(errs)
+	}
+	defer ldb.Close()
+
+	str := `INSERT INTO enroll (request_id, method,  uri, protocol, remote_address, status_code, byte_length, time_taken)
+			            VALUES(:request_id, :method, :uri, :protocol, :remote_address, :status_code, :byte_length, :time_taken); `
+
+	_, err := ldb.NamedExec(str, eData)
+	if err != nil {
+		fmt.Println("error :", err)
+		return err
+	}
+	return nil
+}
+
+func (rCA *RootCA) storeRootCA() error {
+	// Connecting to the database
+	ldb, errs := db.Connect("")
+	if errs != nil {
+		log.Fatal(errs)
+	}
+	defer ldb.Close()
+
+	str := `INSERT INTO root_certs (subject,certificate,issuer,not_before,not_after)
+					VALUES(:subject,:certificate,:issuer,:not_before,:not_after); `
+
+	_, err := ldb.NamedExec(str, rCA)
+	if err != nil {
+		fmt.Println("error :", err)
+		return err
+	}
+	return nil
+}
+
+func (iCA *IntermediateCA) storeIntermediateCA() error {
+	// Connecting to the database
+	ldb, errs := db.Connect("")
+	if errs != nil {
+		log.Fatal(errs)
+	}
+	defer ldb.Close()
+
+	str := `INSERT INTO intermediate_certs (subject,certificate,issuer,not_before,not_after)
+	VALUES(:subject,:certificate,:issuer,:not_before,:not_after); `
+
+	_, err := ldb.NamedExec(str, iCA)
+	if err != nil {
+		fmt.Println("error :", err)
+		return err
+	}
+	return nil
+}
+
+func (D *DeviceCert) storeDeviceCert() error {
+
+	// Connecting to the database
+	ldb, errs := db.Connect("")
+	if errs != nil {
+		log.Fatal(errs)
+	}
+	defer ldb.Close()
+
+	str := `INSERT INTO device_cert (subject,user_id,certificate,issuer,not_before,not_after)
+	VALUES(:subject,:user_id,:certificate,:issuer,:not_before,:not_after); `
+
+	_, err := ldb.NamedExec(str, D)
+	if err != nil {
+		fmt.Println("error :", err)
+		return err
+	}
+	return nil
+}
+
+func HandleGetEnrolledData(w http.ResponseWriter, r *http.Request) {
+	err := verifyToken(w, r)
+	if err != nil {
+		fmt.Println("ERROR verifying the token", err)
+		return
+	}
+
+	dCert := GetAllEnrolledUser()
+	d, _ := json.Marshal(dCert)
+
+	w.Write(d)
+}
+
+func GetAllEnrolledUser() []DeviceCert {
+	// Connecting to the database
+	ldb, errs := db.Connect("")
+	if errs != nil {
+		log.Fatal(errs)
+	}
+	defer ldb.Close()
+
+	var d []DeviceCert
+	str := `SELECT d.* FROM device_cert d
+	INNER JOIN (SELECT i.subject FROM intermediate_certs i GROUP BY i.subject) as intermediate
+	ON d.issuer = intermediate.subject ;`
+
+	err := ldb.Select(&d, str)
+	if err != nil {
+		fmt.Println("ERROR getting user device cert", err)
+		return nil
+	}
+	return d
+}
+
+func HandleCreatetoken(w http.ResponseWriter, r *http.Request) {
+
+	dId := r.URL.Query().Get("device_id")
+	user_id, _ := strconv.Atoi(dId)
+	token, _ := CreateToken(uint32(user_id))
+	t, _ := json.Marshal(token)
+	w.Write(t)
+}
+
+func CreateToken(d uint32) (string, error) {
+	claims := jwt.MapClaims{}
+	claims["authorized"] = true
+	claims["user_id"] = d
+	claims["exp"] = time.Now().Add(time.Hour * 1).Unix() //Token expires after 1 hour
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte("98hbun98h"))
+}
+
+func verifyToken(w http.ResponseWriter, r *http.Request) error {
+	tokenString := ExtractToken(r)
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected Signing Method: %v", token.Header["alg"])
+		}
+		return []byte("98hbun98h"), nil
+	})
+	if err != nil {
+		return err
+	}
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		Pretty(claims)
+	}
+	w.WriteHeader(http.StatusOK)
+	return nil
+}
+
+func ExtractToken(r *http.Request) string {
+	keys := r.URL.Query()
+	token := keys.Get("token")
+	if token != "" {
+		return token
+	}
+	bearerToken := r.Header.Get("Authorization")
+	if len(strings.Split(bearerToken, " ")) == 2 {
+		return strings.Split(bearerToken, " ")[1]
+	}
+	return ""
+}
+
+// Pretty display the claims licely in the terminal
+func Pretty(data interface{}) {
+	b, err := json.MarshalIndent(data, "", " ")
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	fmt.Println(string(b))
 }

@@ -110,11 +110,11 @@ func (c *Client) CACerts(ctx context.Context) ([]*x509.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	resp, err := c.makeHTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
+
 	defer consumeAndClose(resp.Body)
 
 	if err := checkResponseError(resp); err != nil {
@@ -177,6 +177,12 @@ func (c *Client) Reenroll(ctx context.Context, r *x509.CertificateRequest) (*x50
 
 // Enroll requests a new certificate.
 func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, renew bool) (*x509.Certificate, error) {
+
+	// certEncodedd := pem.EncodeToMemory((&pem.Block{
+	// 	Type:  "CERTIFICATE",
+	// 	Bytes: r.Raw,
+	// }))
+	// pp.Println("CHECKING client.go ENROLL 01----('CSR')-------", string(certEncodedd))
 	reqBody := ioutil.NopCloser(bytes.NewBuffer(base64Encode(r.Raw)))
 
 	var endpoint = enrollEndpoint
@@ -193,6 +199,7 @@ func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, r
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
+
 	defer consumeAndClose(resp.Body)
 
 	if err := checkResponseError(resp); err != nil {

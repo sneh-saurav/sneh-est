@@ -87,9 +87,9 @@ func (ca *MockCA) CACerts(
 
 // CSRAttrs returns an empty sequence of CSR attributes, unless the additional
 // path segment is:
-//  - "csrattrs", in which case it returns the same example sequence described
-//    in RFC7030 4.5.2; or
-//  - "triggererrors", in which case an error is returned for testing purposes.
+//   - "csrattrs", in which case it returns the same example sequence described
+//     in RFC7030 4.5.2; or
+//   - "triggererrors", in which case an error is returned for testing purposes.
 func (ca *MockCA) CSRAttrs(
 	ctx context.Context,
 	aps string,
@@ -142,6 +142,7 @@ func (ca *MockCA) Enroll(
 	aps string,
 	r *http.Request,
 ) (*x509.Certificate, error) {
+
 	// Process any requested triggered errors.
 	if aps == triggerErrorsAPS {
 		switch csr.Subject.CommonName {
@@ -277,6 +278,7 @@ func (ca *MockCA) ServerKeyGen(
 	}
 
 	newCSR, err := x509.ParseCertificateRequest(csrDER)
+
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse certificate request: %w", err)
 	}
@@ -429,6 +431,8 @@ func NewTransient() (*MockCA, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate root CA private key: %w", err)
 	}
+
+	//pp.Println("CHECKING KEY CEECKING-----", rootKey)
 
 	rootKI, err := makePublicKeyIdentifier(rootKey.Public())
 	if err != nil {

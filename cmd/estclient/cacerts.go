@@ -31,6 +31,7 @@ import (
 
 // cacerts requests the current CA certificates.
 func cacerts(w io.Writer, set *flag.FlagSet) error {
+
 	cfg, err := newConfig(set)
 	if err != nil {
 		return fmt.Errorf("failed to get configuration: %v", err)

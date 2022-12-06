@@ -23,14 +23,15 @@ import (
 
 // URI constants.
 const (
-	cacertsEndpoint      = "/cacerts"
-	csrattrsEndpoint     = "/csrattrs"
-	enrollEndpoint       = "/simpleenroll"
-	estPathPrefix        = "/.well-known/est"
-	healthCheckEndpoint  = "/healthcheck"
-	reenrollEndpoint     = "/simplereenroll"
-	serverkeygenEndpoint = "/serverkeygen"
-	tpmenrollEndpoint    = "/tpmenroll"
+	cacertsEndpoint       = "/cacerts"
+	csrattrsEndpoint      = "/csrattrs"
+	enrollEndpoint        = "/simpleenroll"
+	estPathPrefix         = "/.well-known/est"
+	healthCheckEndpoint   = "/healthcheck"
+	reenrollEndpoint      = "/simplereenroll"
+	serverkeygenEndpoint  = "/serverkeygen"
+	tpmenrollEndpoint     = "/tpmenroll"
+	getEnrollDataEndpoint = "/getenrolldata"
 )
 
 // HTTP header and MIME type constants.
