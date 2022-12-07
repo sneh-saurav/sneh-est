@@ -81,11 +81,6 @@ func enrollCommon(w io.Writer, set *flag.FlagSet, renew, keygen bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to read CSR from file: %v", err)
 		}
-		// certEncoded := pem.EncodeToMemory((&pem.Block{
-		// 	Type:  "CERTIFICATE",
-		// 	Bytes: csr.Raw,
-		// }))
-		// pp.Println("CHECKING ENROLL 01-----('CSR')------", string(certEncoded))
 
 	} else {
 		if renew {
@@ -119,19 +114,8 @@ func enrollCommon(w io.Writer, set *flag.FlagSet, renew, keygen bool) error {
 				if err != nil {
 					return fmt.Errorf("failed to generate temporary private key: %v", err)
 				}
-				// derKey, _ := x509.MarshalECPrivateKey(csrkey)
 
-				// certEncoded := pem.EncodeToMemory((&pem.Block{
-				// 	Type:  "PRIVATE KEY",
-				// 	Bytes: derKey,
-				// }))
-				// fmt.Println("CHECKING ENROLL 01-----------", string(certEncoded))
 				csr, err = cfg.GenerateCSR(csrkey)
-				// certEncodedd := pem.EncodeToMemory((&pem.Block{
-				// 	Type:  "CERTIFICATE",
-				// 	Bytes: csr.Raw,
-				// }))
-				// fmt.Println("CHECKING ENROLL 02-----------", string(certEncodedd))
 			} else {
 				csr, err = cfg.GenerateCSR(nil)
 			}
@@ -151,23 +135,9 @@ func enrollCommon(w io.Writer, set *flag.FlagSet, renew, keygen bool) error {
 		cert, err = client.Reenroll(ctx, csr)
 	} else if keygen {
 		cert, key, err = client.ServerKeyGen(ctx, csr)
-		// certEncodedd := pem.EncodeToMemory((&pem.Block{
-		// 	Type:  "CERTIFICATE",
-		// 	Bytes: cert.Raw,
-		// }))
-		// pp.Println("CHECKING SERVERGEN ENROLL 01----(CERT.PEM)-------", string(certEncodedd))
-		// certEncoded := pem.EncodeToMemory((&pem.Block{
-		// 	Type:  "PRIVATE KEY",
-		// 	Bytes: key,
-		// }))
-		// pp.Println("CHECKING SERVERGEN  ENROLL 02-----(KEY.PEM)------", string(certEncoded))
+
 	} else {
 		cert, err = client.Enroll(ctx, csr)
-		//certEncoded := pem.EncodeToMemory((&pem.Block{
-		//	Type:  "CERTIFICATE",
-		//	Bytes: cert.Raw,
-		//}))
-		//pp.Println("CHECKING ENROLL 02----('CERT.PEM')-------", string(certEncoded))
 	}
 	if err != nil {
 		return fmt.Errorf("failed to get certificate: %v", err)

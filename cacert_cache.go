@@ -76,11 +76,6 @@ func (c *cacertCache) Verify(
 	}
 
 	_, err = cert.Verify(opts)
-	// for _, j := range chains {
-	// 	for i, _ := range j {
-	// 		fmt.Println("SUBJECT OF THE CHAIN CERTIFICATE", j[i].Subject)
-	// 	}
-	// }
 	if err != nil {
 		return errInvalidClientCert
 	}

@@ -75,13 +75,11 @@ func main() {
 	var err error
 	if *fConfig != "" {
 		cfg, err = configFromFile(*fConfig)
-		//pp.Println("CHECKING MAIN-----", cfg)
 		if err != nil {
 			log.Fatalf("failed to read configuration file: %v", err)
 		}
 	} else {
 		cfg = &config{}
-		//pp.Println("CHECKING MAIN-----", cfg.MockCA)
 	}
 
 	// Create mock CA. If no mock CA was specified in the configuration file,
@@ -94,7 +92,6 @@ func main() {
 		}
 	} else {
 		ca, err = mockca.NewTransient()
-		//pp.Println("CHECKING MAIN-----", ca)
 		if err != nil {
 			log.Fatalf("failed to create mock CA: %v", err)
 		}

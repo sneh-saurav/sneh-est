@@ -432,8 +432,6 @@ func NewTransient() (*MockCA, error) {
 		return nil, fmt.Errorf("failed to generate root CA private key: %w", err)
 	}
 
-	//pp.Println("CHECKING KEY CEECKING-----", rootKey)
-
 	rootKI, err := makePublicKeyIdentifier(rootKey.Public())
 	if err != nil {
 		return nil, fmt.Errorf("failed to make root CA public key identifier: %w", err)

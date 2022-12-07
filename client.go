@@ -178,11 +178,6 @@ func (c *Client) Reenroll(ctx context.Context, r *x509.CertificateRequest) (*x50
 // Enroll requests a new certificate.
 func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, renew bool) (*x509.Certificate, error) {
 
-	// certEncodedd := pem.EncodeToMemory((&pem.Block{
-	// 	Type:  "CERTIFICATE",
-	// 	Bytes: r.Raw,
-	// }))
-	// pp.Println("CHECKING client.go ENROLL 01----('CSR')-------", string(certEncodedd))
 	reqBody := ioutil.NopCloser(bytes.NewBuffer(base64Encode(r.Raw)))
 
 	var endpoint = enrollEndpoint
