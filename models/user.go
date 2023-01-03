@@ -10,6 +10,7 @@ type User struct {
 	Password   string    `db:"-" json:"password,omitempty"`
 	HashedPass []byte    `db:"password" json:"-"`
 	UserToken  string    `db:"user_token" json:"user_token"`
+	Roles      int32     `db:"roles" json:"roles"`
 	CreatedOn  time.Time `db:"added_date" json:"added_date"`
 	UpdatedOn  time.Time `db:"updated_date" json:"updated_date"`
 }
