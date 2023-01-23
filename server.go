@@ -211,7 +211,9 @@ func NewRouter(cfg *ServerConfig) (http.Handler, error) {
 	).Get("/healthcheck", healthcheck)
 	r.With(requireBasicAuth(cfg.CheckBasicAuth, false)).Get(getEnrollDataEndpoint, HandleGetEnrolledData)
 	r.With(requireBasicAuth(cfg.CheckBasicAuth, false)).Get("/createtoken", HandleCreatetoken)
-	r.With(requireBasicAuth(cfg.CheckBasicAuth, false)).Get("/auth/registration/user", HandleCreateAdminUser)
+	r.With(requireBasicAuth(cfg.CheckBasicAuth, false)).Post("/auth/registration/user", HandleCreateAdmin)
+	r.With(requireBasicAuth(cfg.CheckBasicAuth, false)).Post("/api/admin/user", HandleCreateUser)
+	r.With(requireBasicAuth(cfg.CheckBasicAuth, false)).Get("/api/auth/login", HandleLoginUser)
 
 	// EST endpoints.
 	r.Route(estPathPrefix, func(r chi.Router) {
@@ -1025,7 +1027,7 @@ func verifyToken(w http.ResponseWriter, r *http.Request) error {
 	tokenString := ExtractToken(r)
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected Signing Method: %v", token.Header["alg"])
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte("98hbun98h"), nil
 	})

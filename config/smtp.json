@@ -1,0 +1,8 @@
+{
+	"from": "snehx@ssrc.tii.ae",
+	"host": "smtp.mailtrap.io",
+	"user": "8f40f85e4f5e66",
+	"password": "9524c484dc266b",
+	"port": 587,
+	"template_path": "../.././templates"
+}

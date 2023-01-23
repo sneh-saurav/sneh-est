@@ -10,7 +10,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-const defConfPath = "./config/database.json"
+const defConfPath = "../.././config/database.json"
 
 type config struct {
 	Host     string `json:"host"`
